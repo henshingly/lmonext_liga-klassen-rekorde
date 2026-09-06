@@ -10,7 +10,7 @@
     "license": "GPL-3.0-only",
     "homepage": "https://github.com/henshingly/lmonext_liga-klassen-rekorde",
     "icon": "🏆",
-    "min_core_version": "1.9.2",
+    "min_core_version": "1.9.2-beta",
     "type": "both",
     "standalone_entrypoints": ["lmo-rekorde.php"],
     "lang_dir": "lang/",
