@@ -1,0 +1,35 @@
+{
+    "name": "liga-klassen-rekorde",
+    "version": "1.5.2",
+    "display_name": "Liga-Klassen & Rekorde",
+    "description": {
+        "de": "Bündelt mehrere Saison-Instanzen derselben Wettbewerbsserie (z.B. \"1. Fussball Bundesliga\" über mehrere Jahre) als Liga-Klasse und stellt darauf aufbauend Meisterliste + Rekordspiele (höchster Sieg, torreichste Partie, Serien u.v.m.) über alle Saisons der Klasse hinweg bereit.",
+        "en": "Groups multiple season instances of the same recurring competition (e.g. \"1. Bundesliga\" across several years) into a league class, and provides a champions list plus record games (biggest win, highest-scoring match, streaks and more) across all seasons of that class."
+    },
+    "author": "Dietmar Kersting",
+    "license": "GPL-3.0-only",
+    "homepage": "https://github.com/henshingly/lmonext_liga-klassen-rekorde",
+    "icon": "🏆",
+    "min_core_version": "1.9.2",
+    "type": "both",
+    "standalone_entrypoints": ["lmo-rekorde.php"],
+    "lang_dir": "lang/",
+    "admin_nav": [
+        {
+            "action": "ligaklassen",
+            "label_key": "nav_ligaklassen",
+            "icon": "🏆",
+            "position": 25
+        }
+    ],
+    "admin_views": {
+        "ligaklassen": "view_ligaklassen.php"
+    },
+    "admin_handlers": [
+        "handler_ligaklassen.php"
+    ],
+    "db_tables": [
+        "liga_klassen"
+    ],
+    "dependencies": []
+}
