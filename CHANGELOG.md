@@ -15,6 +15,12 @@ Stammt aus einem separaten Chat/Session (Konzeptdiskussion 17.08.2026, siehe
 lmonext_liga_klassen_konzept.md) und wurde nachträglich für den Addon-Manager
 verpackt, ohne die 1.9.1-beta-Core-Dateien anzufassen.
 
+## Version 1.5.3 (Bugfix)
+
+- KRITISCHER Bugfix (gemeldet: Standalone-Aufruf über addon-run.php lieferte einen komplett leeren `<body>`, ohne jede sichtbare Fehlermeldung - Ursache erst über das Server-Error-Log gefunden: "file_get_contents(.../templates/standard.tpl.php): Failed to open stream"): der Template-Ordner hieß versehentlich "template" (Singular) statt "templates" (Plural, wie in allen anderen Standalone-Addons dieses Systems konsistent verwendet - mini, viewer, ewige, relegation, tabellenrechner). Ordner korrekt umbenannt. file_get_contents() gibt bei einer fehlenden Datei nur eine PHP-Warning aus (nicht sichtbar auf der Seite) und liefert false zurück - (string)false wurde zu einem leeren String, wodurch renderRekordeView() am Ende komplett leer blieb.
+- Zusätzlich (lmo-rekorde.php 1.12.1, Verteidigung in der Tiefe): rkLoadTemplate() zeigt jetzt eine sichtbare Fehlermeldung, falls selbst der Fallback "standard.tpl.php" fehlen sollte, statt eines stillen, leeren Strings - damit ein ähnliches Problem künftig sofort auf der Seite erkennbar wäre.
+- Gegen den Addon-Manager-Sicherheitsscanner erneut getestet: keine Treffer im gesamten Addon-Paket.
+
 ## Version 1.4.0
 
 - Sammel-Bearbeitung: neue Aktion "Alle Saisons speichern" je Klasse -

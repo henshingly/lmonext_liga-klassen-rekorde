@@ -2,7 +2,7 @@
 /**
  * Project: LMOnext
  * Filename: addon/liga-klassen-rekorde/lmo-rekorde.php
- * Fileversion: 1.12.0
+ * Fileversion: 1.12.1
  *
  * PHP version 8.2
  *
@@ -849,12 +849,32 @@ function rkLaengsteOhneEigeneToreSerie(int $klasseId, int $limit) : array
 
 /**
  * Laedt das Template.
+ *
+ * ROBUSTHEIT (Bugfix, gemeldet: Aufruf lieferte komplett leeren <body>,
+ * ohne jede Fehlermeldung sichtbar): der Ordner hiess auf dem Server
+ * versehentlich "template" (Singular) statt "templates" (Plural, wie in
+ * ALLEN anderen Standalone-Addons dieses Systems konsistent verwendet -
+ * mini, viewer, ewige, relegation, tabellenrechner). file_get_contents()
+ * gibt bei einer fehlenden Datei nur eine PHP-Warning aus (landet im
+ * Error-Log, nicht auf der Seite selbst) und liefert false zurück -
+ * (string)false wird zu einem leeren String, wodurch renderRekordeView()
+ * am Ende komplett leer blieb, ohne jeden sichtbaren Hinweis auf den
+ * eigentlichen Fehler. Ordner korrekt in "templates/" umbenannt.
+ * Zusätzlich als Verteidigung in der Tiefe: falls SELBST der Fallback
+ * "standard.tpl.php" fehlen sollte, wird jetzt eine sichtbare
+ * Fehlermeldung zurückgegeben statt eines stillen, leeren Strings - damit
+ * ein ähnliches Problem künftig sofort erkennbar wäre, statt erst über
+ * das Server-Error-Log gefunden werden zu müssen.
  */
 function rkLoadTemplate(string $templateName) : string
 {
     $templatePath = __DIR__ . '/templates/' . $templateName . '.tpl.php';
     if (!is_file($templatePath)) {
         $templatePath = __DIR__ . '/templates/standard.tpl.php';
+    }
+    if (!is_file($templatePath)) {
+        return '<p style="font-family:sans-serif;color:#c0392b;padding:12px">'
+            . 'Template-Datei fehlt (addon/liga-klassen-rekorde/templates/standard.tpl.php).</p>';
     }
     return (string)file_get_contents($templatePath);
 }
