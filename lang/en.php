@@ -71,6 +71,7 @@ return [
     'liga_rekorde_heading_ohne_gegentore' => 'Games without conceding',
     'liga_rekorde_heading_ohne_eigene_tore' => 'Games without scoring',
     'liga_rekorde_col_anzahl_spiele'      => 'Games',
+    'liga_rekorde_heading_tabellenfuehrung' => 'Longest streak in 1st place',
     'liga_rekorde_heading_siegesserie'    => 'Longest winning streaks',
     'liga_rekorde_heading_ohne_niederlage' => 'Longest unbeaten streaks',
     'liga_rekorde_heading_ohne_sieg'       => 'Longest winless streaks',

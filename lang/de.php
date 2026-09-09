@@ -71,6 +71,7 @@ return [
     'liga_rekorde_heading_ohne_gegentore'          => 'Spiele ohne Gegentore',
     'liga_rekorde_heading_ohne_eigene_tore'        => 'Spiele ohne eigene Tore',
     'liga_rekorde_col_anzahl_spiele'               => 'Spiele',
+    'liga_rekorde_heading_tabellenfuehrung'        => 'Längste Serie an Tabellenplatz 1',
     'liga_rekorde_heading_siegesserie'             => 'Längste Siegesserien',
     'liga_rekorde_heading_ohne_niederlage'         => 'Längste Serien ohne Niederlage',
     'liga_rekorde_heading_ohne_sieg'               => 'Längste Serien ohne Sieg',

@@ -2,7 +2,7 @@
 /**
  * Project: LMOnext
  * Filename: addon/liga-klassen-rekorde/lmo-rekorde.php
- * Fileversion: 1.12.1
+ * Fileversion: 1.13.1
  *
  * PHP version 8.2
  *
@@ -848,6 +848,164 @@ function rkLaengsteOhneEigeneToreSerie(int $klasseId, int $limit) : array
 }
 
 /**
+ * Laengste Serie an aufeinanderfolgenden VOLLSTAENDIGEN Spieltagen auf
+ * Tabellenplatz 1, ueber Saisongrenzen der Klasse hinweg (mit derselben
+ * Saison-Luecken-Erkennung wie alle anderen Serienarten, siehe
+ * rkComputeStreak()). Anders als die sieben Serien oben (die auf EINZELNEN
+ * SPIELEN basieren) braucht diese Auswertung die TABELLE nach jedem
+ * einzelnen Spieltag - dafuer wird LigaService::computeStandings()
+ * (dieselbe, bereits bewaehrte Tabellenberechnung wie bei der
+ * Meisterliste, siehe rkMeisterliste()) fuer jeden VOLLSTAENDIGEN
+ * Spieltag jeder Saison der Klasse aufgerufen. Unvollstaendige Spieltage
+ * werden uebersprungen (weder gewertet noch als Serienabbruch behandelt) -
+ * der Tabellenstand ist erst nach Abschluss eines Spieltags aussagekraeftig,
+ * ein Zwischenstand waehrend eines laufenden Spieltags waere willkuerlich.
+ * Nutzt dieselben, bereits per rkBulkLoadStandingsData() im Speicher
+ * geladenen Rohdaten (keine zusaetzlichen Datenbankabfragen) - siehe
+ * dortigen Docblock zum Performance-Hintergrund; computeStandings() selbst
+ * ist reine PHP-Berechnung auf bereits geladenen Daten, daher trotz vieler
+ * Aufrufe (einer je vollstaendigem Spieltag, nicht nur einer je Saison)
+ * unkritisch fuer die Laufzeit.
+ *
+ * @return array Liste je Team mit laengster Serie, absteigend sortiert:
+ *               ['team_id','team_name','laenge','von_saison','bis_saison']
+ */
+function rkLaengsteTabellenfuehrungSerie(int $klasseId, int $limit) : array
+{
+    $ligen = rkGetKlasseLigen($klasseId);
+    $bulk  = rkBulkLoadStandingsData($ligen);
+
+    $ligaPosition = [];
+    foreach ($ligen as $idx => $l) {
+        $ligaPosition[(int)$l['id']] = $idx;
+    }
+
+    $current     = 0;
+    $currentTeam = null;
+    $currentVon  = null;
+    $prevLigaId  = null;
+
+    $best = []; // teamId => ['team_id','team_name','laenge','von_saison','bis_saison']
+
+    foreach ($ligen as $l) {
+        $ligaId = (int)$l['id'];
+        $saison = rkSeasonOf($l);
+
+        $allSpieltage = $bulk['spieltageByLiga'][$ligaId] ?? [];
+        if (empty($allSpieltage)) {
+            continue;
+        }
+        // Nach Spieltagnummer aufsteigend (SQL-Abfrage in
+        // rkBulkLoadStandingsData() liefert das i.d.R. bereits so, hier
+        // sicherheitshalber trotzdem explizit sortiert).
+        usort($allSpieltage, fn(array $a, array $b) : int => (int)$a['nummer'] <=> (int)$b['nummer']);
+
+        $teams   = $bulk['teamsByLiga'][$ligaId] ?? [];
+        $partien = $bulk['partienByLiga'][$ligaId] ?? [];
+        $opts    = $bulk['optionsByLiga'][$ligaId] ?? [];
+
+        // Partien nach Spieltagnummer gruppieren (statt bei jedem Spieltag
+        // das komplette Saison-Partien-Array neu zu durchsuchen/filtern) -
+        // die kumulative Liste unten wird dann pro Spieltag nur um die
+        // Partien GENAU DIESES Spieltags erweitert. Reduziert den Aufwand
+        // von O(Spieltage × Spiele) auf O(Spiele) je Saison - relevant bei
+        // Klassen mit vielen Saisons, siehe Docblock von
+        // rkBulkLoadStandingsData() zum früheren Performance-Vorfall dieses
+        // Addons.
+        $partienByNummer = [];
+        foreach ($partien as $p) {
+            $partienByNummer[(int)($p['_spieltag_nummer'] ?? 0)][] = $p;
+        }
+        $partienBisSpieltag = [];
+
+        foreach ($allSpieltage as $st) {
+            $nr = (int)$st['nummer'];
+            // Partien DIESES Spieltags immer zum kumulativen Array
+            // hinzufuegen - UNABHAENGIG davon, ob der Spieltag insgesamt
+            // vollstaendig ist. Bereits gespielte Einzelpartien eines noch
+            // unvollstaendigen Spieltags muessen trotzdem in die Tabelle
+            // eines SPAETEREN, vollstaendigen Spieltags einfliessen (die
+            // echte Tabelle beruecksichtigt ja jedes gespielte Spiel,
+            // unabhaengig davon ob "sein" Spieltag als Ganzes fertig ist).
+            // Nur die AUSWERTUNG (wer fuehrt die Tabelle an) wird unten bei
+            // einem unvollstaendigen Spieltag uebersprungen, nicht das
+            // Einsammeln der Partien selbst.
+            foreach (($partienByNummer[$nr] ?? []) as $p) {
+                $partienBisSpieltag[] = $p;
+            }
+
+            $gespielt = (int)($st['gespielt'] ?? 0);
+            $gesamt   = (int)($st['partie_count'] ?? 0);
+            if ($gesamt === 0 || $gespielt !== $gesamt) {
+                continue; // unvollstaendiger Spieltag - ueberspringen, Serie bleibt unangetastet
+            }
+
+            // WICHTIG (Bugfix, gemeldet: Serie zeigte 374 Spieltage am Stück -
+            // rechnerisch exakt 11 Meistersaisons a 34 Spieltage, siehe
+            // CHANGELOG.md): computeStandings() berechnet IMMER die Tabelle
+            // aus ALLEN übergebenen, bereits gespielten Partien - der
+            // $currentSpieltag-Parameter (hier $nr) filtert die Partien NICHT
+            // nach Spieltag, sondern steuert ausschliesslich, ob eine "ab
+            // Spieltag X" greifende Strafpunkte-Regel zu diesem Zeitpunkt der
+            // Saison schon wirksam ist (siehe StandingsTrait::computeStandings()
+            // im Core). Ohne diese Vorfilterung lieferte jeder Aufruf trotz
+            // unterschiedlichem $nr immer dieselbe, komplette Saison-Endtabelle
+            // zurueck - der Meister einer Saison erschien dadurch bei JEDEM
+            // Spieltag dieser Saison als "Erster", nicht nur ab dem Spieltag,
+            // an dem er die Tabelle tatsaechlich anfuehrte. Die Partien-Liste
+            // wird deshalb hier selbst kumulativ auf Spiele BIS EINSCHLIESSLICH
+            // diesem Spieltag eingegrenzt (_spieltag_nummer stammt aus
+            // rkBulkLoadStandingsData()), statt sie bei jedem Aufruf neu zu
+            // filtern (O(Spiele) statt O(Spieltage × Spiele) je Saison).
+            $rows = LigaService::computeStandings($teams, $partienBisSpieltag, $opts, $ligaId, 'overall', $nr);
+            if (empty($rows)) {
+                continue;
+            }
+            $leaderId = (int)($rows[0]['id'] ?? 0);
+            if ($leaderId <= 0) {
+                continue;
+            }
+
+            if ($prevLigaId !== null && $ligaId !== $prevLigaId) {
+                $prevPos = $ligaPosition[$prevLigaId] ?? null;
+                $curPos  = $ligaPosition[$ligaId] ?? null;
+                if ($prevPos === null || $curPos === null || $curPos !== $prevPos + 1) {
+                    // Saison-Luecke (dazwischen liegt mind. eine andere
+                    // Saison der Klasse) - laufende Serie bricht ab.
+                    $current     = 0;
+                    $currentTeam = null;
+                    $currentVon  = null;
+                }
+            }
+
+            if ($leaderId === $currentTeam) {
+                $current++;
+            } else {
+                $current     = 1;
+                $currentTeam = $leaderId;
+                $currentVon  = $saison;
+            }
+
+            if ($current > ($best[$leaderId]['laenge'] ?? 0)) {
+                $best[$leaderId] = [
+                    'team_id'    => $leaderId,
+                    'team_name'  => $rows[0]['name'] ?? '',
+                    'laenge'     => $current,
+                    'von_saison' => $currentVon,
+                    'bis_saison' => $saison,
+                ];
+            }
+
+            $prevLigaId = $ligaId;
+        }
+    }
+
+    $results = array_values($best);
+    usort($results, fn(array $a, array $b) : int => $b['laenge'] <=> $a['laenge']);
+    return array_slice($results, 0, $limit);
+}
+
+/**
  * Laedt das Template.
  *
  * ROBUSTHEIT (Bugfix, gemeldet: Aufruf lieferte komplett leeren <body>,
@@ -1084,6 +1242,7 @@ function rkRenderBody(int $klasseId, string $view, int $limit) : string
     $ohneSieg        = rkLaengsteOhneSiegSerie($klasseId, $limit);
     $serieOhneGegentore  = rkLaengsteOhneGegentoreSerie($klasseId, $limit);
     $serieOhneEigeneTore = rkLaengsteOhneEigeneToreSerie($klasseId, $limit);
+    $tabellenfuehrung    = rkLaengsteTabellenfuehrungSerie($klasseId, $limit);
     return
         '<h3 class="rk-subheading">' . h(tf('liga_rekorde_heading_hoechster_sieg')) . '</h3>'
         . rkRenderPartienListeHtml($hoechsterSieg, tf('liga_rekorde_col_diff'), 'diff')
@@ -1095,6 +1254,8 @@ function rkRenderBody(int $klasseId, string $view, int $limit) : string
         . rkRenderTeamCountHtml($ohneGegentore, tf('liga_rekorde_col_anzahl_spiele'))
         . '<h3 class="rk-subheading">' . h(tf('liga_rekorde_heading_ohne_eigene_tore')) . '</h3>'
         . rkRenderTeamCountHtml($ohneEigeneTore, tf('liga_rekorde_col_anzahl_spiele'))
+        . '<h3 class="rk-subheading">' . h(tf('liga_rekorde_heading_tabellenfuehrung')) . '</h3>'
+        . rkRenderSerieHtml($tabellenfuehrung)
         . '<h3 class="rk-subheading">' . h(tf('liga_rekorde_heading_siegesserie')) . '</h3>'
         . rkRenderSerieHtml($siegSerie)
         . '<h3 class="rk-subheading">' . h(tf('liga_rekorde_heading_ohne_niederlage')) . '</h3>'

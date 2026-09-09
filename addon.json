@@ -1,6 +1,6 @@
 {
     "name": "liga-klassen-rekorde",
-    "version": "1.5.3",
+    "version": "1.6.1",
     "display_name": "Liga-Klassen & Rekorde",
     "description": {
         "de": "Bündelt mehrere Saison-Instanzen derselben Wettbewerbsserie (z.B. \"1. Fussball Bundesliga\" über mehrere Jahre) als Liga-Klasse und stellt darauf aufbauend Meisterliste + Rekordspiele (höchster Sieg, torreichste Partie, Serien u.v.m.) über alle Saisons der Klasse hinweg bereit.",
